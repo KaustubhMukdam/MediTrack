@@ -6,6 +6,7 @@
 #include <memory>
 #include <limits>
 #include <typeinfo>
+#include <sstream> // Required for the robust loadData function
 
 using namespace std;
 
@@ -21,20 +22,15 @@ protected:
     time_t timestamp;
 
 public:
-    // Constructor for new records, gets current time
     HealthRecord() : timestamp(time(0)) {}
-    // Constructor for loading records with an existing timestamp
     HealthRecord(time_t loaded_time) : timestamp(loaded_time) {}
-
     virtual void display() const = 0;
     virtual string getType() const = 0;
     virtual void save(ofstream& file) const = 0;
     virtual ~HealthRecord() = default;
 
-    // Helper to get a formatted time string for display
     string getFormattedTimestamp() const {
         char buffer[20];
-        // strftime formats time_t into a readable string
         strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", localtime(&timestamp));
         return string(buffer);
     }
@@ -43,9 +39,7 @@ public:
 class BloodPressureRecord : public HealthRecord {
     int systolic, diastolic;
 public:
-    // Constructor for new records
     BloodPressureRecord(int s, int d) : HealthRecord(), systolic(s), diastolic(d) {}
-    // Constructor for loading records
     BloodPressureRecord(int s, int d, time_t t) : HealthRecord(t), systolic(s), diastolic(d) {}
     
     string getType() const override { return "BP"; }
@@ -68,11 +62,8 @@ public:
 class WeightRecord : public HealthRecord {
     double weight;
 public:
-    // Constructor for new records
     WeightRecord(double w) : HealthRecord(), weight(w) {}
-    // Constructor for loading records
     WeightRecord(double w, time_t t) : HealthRecord(t), weight(w) {}
-
     string getType() const override { return "Weight"; }
     
     void display() const override {
@@ -89,16 +80,12 @@ public:
 class BloodSugarRecord : public HealthRecord {
     double sugar;
 public:
-    // Constructor for new records
     BloodSugarRecord(double s) : HealthRecord(), sugar(s) {}
-    // Constructor for loading records
     BloodSugarRecord(double s, time_t t) : HealthRecord(t), sugar(s) {}
-    
     string getType() const override { return "Sugar"; }
     
     void display() const override {
         cout << getFormattedTimestamp() << " - Blood Sugar: " << sugar << " mg/dL";
-        // Assuming fasting blood sugar. Normal is 70-100 mg/dL.
         if (sugar >= 126) {
             cout << "  <-- ⚠️ ALERT: High Blood Sugar (Potential Diabetes)!";
         } else if (sugar < 70) {
@@ -156,12 +143,10 @@ class Patient {
 public:
     Patient(string n, int a, string c) : name(n), age(a), contactInfo(c) {}
 
-    // Add methods
     void addRecord(unique_ptr<HealthRecord> r) { records.push_back(move(r)); }
     void addMedication(const Medication& m) { medications.push_back(m); }
     void addReminder(const Reminder& r) { reminders.push_back(r); }
 
-    // BMI Calculation Method
     void calculateAndDisplayBMI() const {
         double lastWeight = 0.0;
         for (auto it = records.rbegin(); it != records.rend(); ++it) {
@@ -195,7 +180,6 @@ public:
         cout << "---------------------------------\n";
     }
     
-    // Health Trend Analysis Method
     void displayHealthTrend() const {
         int choice;
         cout << "\n--- View Health Trends for " << name << " ---\n";
@@ -204,49 +188,27 @@ public:
         cout << "3. Blood Sugar Trend\n";
         cout << "Enter your choice: ";
         cin >> choice;
-
         if(cin.fail()){
             cin.clear();
             clearInputBuffer();
             cout << "Invalid input.\n";
             return;
         }
-
         cout << "\n--- Trend Report ---\n";
         bool found = false;
         switch(choice) {
             case 1:
-                for(const auto& rec : records) {
-                    if(dynamic_cast<BloodPressureRecord*>(rec.get())) {
-                        rec->display();
-                        found = true;
-                    }
-                }
+                for(const auto& rec : records) if(dynamic_cast<BloodPressureRecord*>(rec.get())) { rec->display(); found = true; }
                 break;
             case 2:
-                for(const auto& rec : records) {
-                    if(dynamic_cast<WeightRecord*>(rec.get())) {
-                        rec->display();
-                        found = true;
-                    }
-                }
+                for(const auto& rec : records) if(dynamic_cast<WeightRecord*>(rec.get())) { rec->display(); found = true; }
                 break;
             case 3:
-                for(const auto& rec : records) {
-                    if(dynamic_cast<BloodSugarRecord*>(rec.get())) {
-                        rec->display();
-                        found = true;
-                    }
-                }
+                for(const auto& rec : records) if(dynamic_cast<BloodSugarRecord*>(rec.get())) { rec->display(); found = true; }
                 break;
-            default:
-                cout << "Invalid choice.\n";
-                return;
+            default: cout << "Invalid choice.\n"; return;
         }
-
-        if (!found) {
-            cout << "No records of that type found.\n";
-        }
+        if (!found) cout << "No records of that type found.\n";
         cout << "--------------------\n";
     }
 
@@ -254,14 +216,11 @@ public:
         cout << "\n--- Patient Profile ---\n";
         cout << "Name: " << name << "\nAge: " << age << "\nContact: " << contactInfo << "\n";
         cout << "\n--- Health Records ---\n";
-        if (records.empty()) cout << "No health records found.\n";
-        for (const auto& r : records) r->display();
+        if (records.empty()) cout << "No health records found.\n"; else for (const auto& r : records) r->display();
         cout << "\n--- Medications ---\n";
-        if (medications.empty()) cout << "No medications found.\n";
-        for (const auto &m : medications) m.display();
+        if (medications.empty()) cout << "No medications found.\n"; else for (const auto &m : medications) m.display();
         cout << "\n--- Reminders ---\n";
-        if (reminders.empty()) cout << "No reminders found.\n";
-        for (const auto &rem : reminders) rem.display();
+        if (reminders.empty()) cout << "No reminders found.\n"; else for (const auto &rem : reminders) rem.display();
         cout << "-----------------------\n";
     }
 
@@ -278,7 +237,6 @@ public:
         if (!found) cout << "No reminders are currently due.\n";
     }
 
-    // Getters
     string getName() const { return name; }
     int getAge() const { return age; }
     string getContact() const { return contactInfo; }
@@ -312,87 +270,72 @@ void saveData(const vector<unique_ptr<Patient>>& patients) {
 
 void loadData(vector<unique_ptr<Patient>>& patients) {
     ifstream file(FILENAME);
-    if (!file) {
-        cout << "No previous data found. Starting a new session.\n";
-        return;
-    }
-
+    if (!file) { cout << "No previous data found. Starting a new session.\n"; return; }
     int patientCount;
-    // --- ROBUSTNESS CHECK 1: Check if the read was successful ---
-    if (!(file >> patientCount)) {
-        cout << "Error: Could not read patient count from file. File may be corrupt.\n";
-        return;
+    if (!(file >> patientCount) || patientCount < 0 || patientCount > 10000) {
+        cout << "Error: Invalid patient count in data file.\n"; return;
     }
-
-    // --- ROBUSTNESS CHECK 2: Sanity check the number of patients ---
-    // We'll assume more than 10,000 patients is an error for this program.
-    if (patientCount < 0 || patientCount > 10000) {
-        cout << "Error: Unreasonable patient count (" << patientCount << ") found in file. Aborting load.\n";
-        return;
-    }
-
-    file.ignore(); // Consume the newline character
-
+    file.ignore(); 
     for (int i = 0; i < patientCount; ++i) {
-        string line, name, contact;
-        int age;
-        
-        // Check if getline was successful
+        string line;
         if (!getline(file, line)) { cout << "Error reading patient data line.\n"; break; }
-
-        size_t pos1 = line.find('|'), pos2 = line.find('|', pos1 + 1);
-        
-        // Check if the format is correct
-        if (pos1 == string::npos || pos2 == string::npos) { cout << "Error parsing patient data.\n"; break; }
-        
-        name = line.substr(0, pos1);
-        age = stoi(line.substr(pos1 + 1, pos2 - pos1 - 1));
-        contact = line.substr(pos2 + 1);
-
+        if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+        stringstream ss(line);
+        string name, ageStr, contact;
+        if (!getline(ss, name, '|') || !getline(ss, ageStr, '|') || !getline(ss, contact)) {
+            cout << "Error: Malformed patient data line: " << line << "\n"; continue;
+        }
+        int age = stoi(ageStr);
         auto patient = make_unique<Patient>(name, age, contact);
-
-        // Add similar checks for recordCount, medCount, etc. for full robustness
         int recordCount;
-        if (!(file >> recordCount)) { cout << "Error reading record count.\n"; break; }
+        file >> recordCount;
         file.ignore();
-
         for (int j = 0; j < recordCount; ++j) {
-            // ... (the rest of your loading logic) ...
+            getline(file, line);
+            if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+            stringstream rec_ss(line);
             string type;
-            file >> type;
-            time_t loaded_timestamp;
+            rec_ss >> type;
+            time_t timestamp;
             if (type == "BP") {
                 int s, d;
-                file >> s >> d >> loaded_timestamp;
-                patient->addRecord(make_unique<BloodPressureRecord>(s, d, loaded_timestamp));
+                rec_ss >> s >> d >> timestamp;
+                patient->addRecord(make_unique<BloodPressureRecord>(s, d, timestamp));
             } else if (type == "Weight") {
                 double w;
-                file >> w >> loaded_timestamp;
-                patient->addRecord(make_unique<WeightRecord>(w, loaded_timestamp));
+                rec_ss >> w >> timestamp;
+                patient->addRecord(make_unique<WeightRecord>(w, timestamp));
             } else if (type == "Sugar") {
                 double s;
-                file >> s >> loaded_timestamp;
-                patient->addRecord(make_unique<BloodSugarRecord>(s, loaded_timestamp));
+                rec_ss >> s >> timestamp;
+                patient->addRecord(make_unique<BloodSugarRecord>(s, timestamp));
             }
-            file.ignore();
         }
-
-        // ... (rest of the loading function) ...
         int medCount;
-        if(!(file >> medCount)) { cout << "Error reading medication count.\n"; break; }
+        file >> medCount;
         file.ignore();
-        for(int j=0; j<medCount; ++j){
+        for (int j = 0; j < medCount; ++j) {
             getline(file, line);
-            pos1 = line.find('|'), pos2 = line.find('|', pos1 + 1);
-            patient->addMedication(Medication(line.substr(0, pos1), line.substr(pos1 + 1, pos2 - pos1 - 1), line.substr(pos2 + 1)));
+            if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+            stringstream med_ss(line);
+            string medName, dosage, schedule;
+            getline(med_ss, medName, '|');
+            getline(med_ss, dosage, '|');
+            getline(med_ss, schedule);
+            patient->addMedication(Medication(medName, dosage, schedule));
         }
         int remCount;
-        if(!(file >> remCount)) { cout << "Error reading reminder count.\n"; break; }
+        file >> remCount;
         file.ignore();
-        for(int j=0; j<remCount; ++j){
+        for (int j = 0; j < remCount; ++j) {
             getline(file, line);
-            pos1 = line.find('|'), pos2 = line.find('|', pos1 + 1);
-            patient->addReminder(Reminder(line.substr(0, pos1), line.substr(pos1 + 1, pos2 - pos1 - 1), line.substr(pos2 + 1)));
+            if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+            stringstream rem_ss(line);
+            string msg, date, time;
+            getline(rem_ss, msg, '|');
+            getline(rem_ss, date, '|');
+            getline(rem_ss, time);
+            patient->addReminder(Reminder(msg, date, time));
         }
         patients.push_back(move(patient));
     }
