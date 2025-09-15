@@ -1,0 +1,36 @@
+# Compiled source files
+*.exe
+*.out
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+
+# Debug files
+*.pdb
+*.idb
+
+# Build folders
+/build/
+bin/
+Debug/
+Release/
+
+# IDE specific files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Backup / temp files
+*.log
+*.tmp
+*.swp
+*.bak
+
+# Reports / generated files (optional – remove if you want to push reports)
+patient_report.txt
