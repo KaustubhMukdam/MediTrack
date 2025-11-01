@@ -34,3 +34,7 @@ Thumbs.db
 
 # Reports / generated files (optional – remove if you want to push reports)
 patient_report.txt
+
+venv
+
+meditrack.db

@@ -29,6 +29,9 @@ public:
     HealthRecord(time_t loaded_time) : timestamp(loaded_time) {}
     virtual void display() const = 0;
     virtual ~HealthRecord() = default;
+    virtual void updateBloodPressure(int systolic, int diastolic) {}
+    virtual void updateWeight(double weight) {}
+    virtual void displayTypeAndValue() const = 0;
     
     string getFormattedTimestamp() const {
         char buffer[20];
@@ -43,7 +46,8 @@ class BloodPressureRecord : public HealthRecord {
 public:
     BloodPressureRecord(int s, int d) : HealthRecord(), systolic(s), diastolic(d) {}
     BloodPressureRecord(int s, int d, time_t t) : HealthRecord(t), systolic(s), diastolic(d) {}
-    
+    void updateBloodPressure(int s, int d) override { systolic = s; diastolic = d; }
+
     void display() const override {
         cout << getFormattedTimestamp() << " - Blood Pressure: " << systolic << "/" << diastolic << " mmHg";
         if (systolic >= 140 || diastolic >= 90) cout << "  <-- ⚠️ ALERT: High Blood Pressure!";
@@ -52,6 +56,10 @@ public:
     }
     int getSystolic() const { return systolic; }
     int getDiastolic() const { return diastolic; }
+
+    void displayTypeAndValue() const override {
+        cout << "Blood Pressure: " << systolic << "/" << diastolic << " mmHg\n";
+    }
 };
 
 class WeightRecord : public HealthRecord {
@@ -59,8 +67,13 @@ class WeightRecord : public HealthRecord {
 public:
     WeightRecord(double w) : HealthRecord(), weight(w) {}
     WeightRecord(double w, time_t t) : HealthRecord(t), weight(w) {}
+    void updateWeight(double w) override { weight = w; }
     void display() const override { cout << getFormattedTimestamp() << " - Weight: " << weight << " kg\n"; }
     double getWeight() const { return weight; }
+
+    void displayTypeAndValue() const override {
+        cout << "Weight: " << weight << " kg\n";
+    }
 };
 
 class BloodSugarRecord : public HealthRecord {
@@ -75,6 +88,9 @@ public:
         cout << "\n";
     }
     double getSugar() const { return sugar; }
+    void displayTypeAndValue() const override {
+        cout << "Blood Sugar: " << sugar << " mg/dL\n";
+    }
 };
 
 
@@ -134,6 +150,9 @@ public:
     const vector<unique_ptr<HealthRecord>>& getRecords() const { return records; }
     const vector<Medication>& getMedications() const { return medications; }
     const vector<Reminder>& getReminders() const { return reminders; }
+    int numRecords() const { return records.size(); }
+    HealthRecord* getRecordByIndex(int idx) { return (idx >= 0 && idx < records.size()) ? records[idx].get() : nullptr; }
+    void displayRecordsWithIndices() const;
 };
 
 
@@ -315,6 +334,10 @@ void Patient::calculateAndDisplayBMI() const {
     double heightMeters;
     cout << "\nPlease enter patient's height in meters (e.g., 1.75): ";
     cin >> heightMeters;
+    if(heightMeters < 0.5 || heightMeters > 2.5) {
+        cout << "Invalid height. Please input value in meters (0.5 - 2.5).\n";
+        return;
+    }
     if (cin.fail() || heightMeters <= 0) {
         cout << "Invalid height. Cannot calculate BMI.\n";
         cin.clear();
@@ -383,6 +406,16 @@ void Patient::checkReminders() const {
     if (!found) cout << "No reminders are currently due.\n";
 }
 
+void Patient::displayRecordsWithIndices() const {
+    if (records.empty()) { cout << "No records.\n"; return; }
+    for (size_t i = 0; i < records.size(); ++i) {
+        cout << i + 1 << ". " << records[i]->getFormattedTimestamp() << " - ";
+        // Change this:
+        records[i]->displayTypeAndValue();
+    }
+}
+
+
 // ------------------- UI Functions -------------------
 void clearInputBuffer() {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -414,14 +447,13 @@ void listAllPatients(const vector<unique_ptr<Patient>>& patients) {
 void patientSubMenu(Patient* patient) {
     int choice;
     do {
-        cout << "\n--- Managing Patient: " << patient->getName() << " ---\n";
-        cout << "1. View Patient Profile\n";
+        cout << "\n--- Doctor Patient Menu ---\n";
+        cout << "1. View Patient\n";
         cout << "2. Add Health Record\n";
-        cout << "3. Add Medication\n";
-        cout << "4. Add Reminder\n";
+        cout << "3. Update Health Record\n";
+        cout << "4. Add Medication\n";
         cout << "5. Calculate BMI\n";
-        cout << "6. View Health Trends\n";
-        cout << "7. Return to Main Menu\n";
+        cout << "6. Back\n";
         cout << "Enter your choice: ";
         cin >> choice;
         if (cin.fail()) {
@@ -453,12 +485,32 @@ void patientSubMenu(Patient* patient) {
                 break;
             }
             case 3: {
-                string name, dosage, schedule;
-                cout << "Medication name: "; clearInputBuffer(); getline(cin, name);
-                cout << "Dosage (e.g., 500mg): "; getline(cin, dosage);
-                cout << "Schedule (e.g., Twice a day): "; getline(cin, schedule);
-                patient->addMedication(Medication(name, dosage, schedule));
-                cout << "Medication added.\n";
+                // --- New: Update Record ---
+                cout << "Enter record number to update: ";
+                int recNum;
+                cin >> recNum;
+                patient->displayRecordsWithIndices();  // display records with numbers
+                if (recNum < 1 || recNum > patient->numRecords()) {
+                    cout << "Invalid record number.\n";
+                    break;
+                }
+                HealthRecord* rec = patient->getRecordByIndex(recNum - 1);
+                if (!rec) {
+                    cout << "Record not found.\n";
+                    break;
+                }
+                if (dynamic_cast<BloodPressureRecord*>(rec)) {
+                    int systolic, diastolic;
+                    cout << "New Systolic: "; cin >> systolic;
+                    cout << "New Diastolic: "; cin >> diastolic;
+                    rec->updateBloodPressure(systolic, diastolic);
+                } else if (dynamic_cast<WeightRecord*>(rec)) {
+                    double weight;
+                    cout << "New Weight: "; cin >> weight;
+                    rec->updateWeight(weight);
+                }
+                // Add more types as needed
+                cout << "Record updated!\n";
                 break;
             }
             case 4: {
@@ -492,53 +544,115 @@ void selectPatient(vector<unique_ptr<Patient>>& patients) {
     }
 }
 
+class Profile {
+public:
+    virtual void start(vector<unique_ptr<Patient>>& patients) = 0;
+    virtual ~Profile() = default;
+};
+
+class DoctorProfile : public Profile {
+public:
+    void start(vector<unique_ptr<Patient>>& patients) override {
+        // Doctor menu code goes here (your existing main menu logic)
+        int choice;
+        do {
+            cout << "\n--- Doctor Patient Menu ---\n";
+            cout << "1. View Patient\n";
+            cout << "2. Add Health Record\n";
+            cout << "3. Update Health Record\n";
+            cout << "4. Add Medication\n";
+            cout << "5. Calculate BMI\n";
+            cout << "6. View Health Trends\n";
+            cout << "7. Back\n";
+            cout << "Enter your choice: ";
+
+            cin >> choice;
+
+            if (cin.fail()) {
+                cout << "Invalid input. Please enter a number.\n";
+                cin.clear();
+                clearInputBuffer();
+                choice = 0;
+                continue;
+            }
+
+            switch (choice) {
+                case 1: addNewPatient(patients); break;
+                case 2: selectPatient(patients); break;
+                case 3: listAllPatients(patients); break;
+                case 4: cout << "Exiting Doctor Mode. Goodbye!\n"; break;
+                default: cout << "Invalid choice. Please try again.\n";
+            }
+        } while (choice != 4);
+    }
+};
+
+class UserProfile : public Profile {
+public:
+    void start(vector<unique_ptr<Patient>>& patients) override {
+        // User menu (ask name, view own info, no edit)
+        string userName;
+        cout << "\nEnter your name: ";
+        clearInputBuffer();
+        getline(cin, userName);
+
+        Patient* user = nullptr;
+        for (auto& p : patients) {
+            if (p->getName() == userName) {
+                user = p.get();
+                break;
+            }
+        }
+        if (!user) {
+            cout << "No record found for user '" << userName << "'.\n";
+            return;
+        }
+
+        // Only allow viewing info and reminders
+        int choice;
+        do {
+            cout << "\n===== User Menu =====\n";
+            cout << "1. View My Records\n";
+            cout << "2. Check Reminders\n";
+            cout << "3. Exit\n";
+            cout << "Enter your choice: ";
+            cin >> choice;
+            if (cin.fail()) {
+                cin.clear(); clearInputBuffer(); choice = 0; continue;
+            }
+            switch (choice) {
+                case 1: user->display(); break;
+                case 2: user->checkReminders(); break;
+                case 3: cout << "Goodbye!\n"; break;
+                default: cout << "Invalid choice. Please try again.\n";
+            }
+        } while (choice != 3);
+    }
+};
+
 
 // ------------------- Main Function -------------------
 int main() {
     DatabaseManager db("meditrack.db");
-    if (!db.open()) {
-        return 1;
-    }
+    if (!db.open()) return 1;
     db.createTables();
-
     vector<unique_ptr<Patient>> patients;
     db.loadPatients(patients);
 
-    cout << "\nWelcome to MediTrack: Your health, Our priority\n";
-    for (const auto& p : patients) {
-        p->checkReminders();
-    }
-    
-    int choice;
-    do {
-        cout << "\n===== MediTrack Main Menu =====\n";
-        cout << "1. Add New Patient\n";
-        cout << "2. Select Patient\n";
-        cout << "3. List All Patients\n";
-        cout << "4. Save and Exit\n";
-        cout << "Enter your choice: ";
-        cin >> choice;
+    cout << "\nSelect your profile type:\n";
+    cout << "1. Doctor\n";
+    cout << "2. User\n";
+    cout << "Enter your choice: ";
+    int profileChoice;
+    cin >> profileChoice;
+    Profile* profile = nullptr;
+    if (profileChoice == 1) profile = new DoctorProfile();
+    else if (profileChoice == 2) profile = new UserProfile();
+    else { cout << "Invalid profile choice.\n"; return 0; }
 
-        if (cin.fail()) {
-            cout << "Invalid input. Please enter a number.\n";
-            cin.clear();
-            clearInputBuffer();
-            choice = 0;
-            continue;
-        }
+    profile->start(patients);
 
-        switch (choice) {
-            case 1: addNewPatient(patients); break;
-            case 2: selectPatient(patients); break;
-            case 3: listAllPatients(patients); break;
-            case 4: 
-                db.saveAllPatients(patients);
-                cout << "Exiting MediTrack. Goodbye!\n";
-                break;
-            default: 
-                cout << "Invalid choice. Please try again.\n";
-        }
-    } while (choice != 4);
-
+    db.saveAllPatients(patients);
+    delete profile;
     return 0;
 }
